@@ -1,13 +1,20 @@
 from cryptography.fernet import Fernet
 
 from app import app
-from app.utils.session import generate_user_key, valid_user_session
+from app.models.endpoint import Endpoint
+from app.utils.session import generate_key, valid_user_session
+
+JAPAN_PREFS = 'uG7IBICwK7FgMJNpUawp2tKDb1Omuv_euy-cJHVZ' \
+  + 'BSydthgwxRFIHxiVA8qUGavKaDXyiM5uNuPIjKbEAW-zB_vzNXWVaafFhW7k2' \
+  + 'fO2_mS5e5eK41XXWwiViTz2VVmGWje0UgQwwVPe1A7aH0s10FgARsd2xl5nlg' \
+  + 'RLHT2krPUw-iLQ5uHZSnYXFuF4caYemWcj4vqB2ocHkt-aqn04jgnnlWWME_K' \
+  + '9ySWdWmPyS66HtLt1tCwc_-xGZklvbHw=='
 
 
 def test_generate_user_keys():
-    key = generate_user_key()
+    key = generate_key()
     assert Fernet(key)
-    assert generate_user_key() != key
+    assert generate_key() != key
 
 
 def test_valid_session(client):
@@ -37,14 +44,27 @@ def test_query_decryption(client):
     rv = client.get('/')
     cookie = rv.headers['Set-Cookie']
 
-    rv = client.get('/search?q=test+1', headers={'Cookie': cookie})
+    rv = client.get(f'/{Endpoint.search}?q=test+1', headers={'Cookie': cookie})
     assert rv._status_code == 200
 
     with client.session_transaction() as session:
         assert valid_user_session(session)
 
-    rv = client.get('/search?q=test+2', headers={'Cookie': cookie})
+    rv = client.get(f'/{Endpoint.search}?q=test+2', headers={'Cookie': cookie})
     assert rv._status_code == 200
 
     with client.session_transaction() as session:
         assert valid_user_session(session)
+
+
+def test_prefs_url(client):
+    base_url = f'/{Endpoint.search}?q=wikipedia'
+    rv = client.get(base_url)
+    assert rv._status_code == 200
+    assert b'wikipedia.org' in rv.data
+    assert b'ja.wikipedia.org' not in rv.data
+
+    rv = client.get(f'{base_url}&preferences={JAPAN_PREFS}')
+    assert rv._status_code == 200
+    assert b'ja.wikipedia.org' in rv.data
+
